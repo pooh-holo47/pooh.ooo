@@ -1,0 +1,487 @@
+<html>
+<head>
+<title>Raster Graphics</title>
+<style>
+/* Raster Graphics มุมซ้ายบน */
+.page-title {
+  position: absolute;
+  top: 15px;
+  left: 20px;
+  margin: 0;
+  font-family: sans-serif;
+  font-size: 24px;
+}
+
+/* คำอธิบาย */
+.instructions {
+  position: absolute;
+  top: 55px;
+  left: 20px;
+  font-family: sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-line;
+  margin: 0;
+}
+
+/*Canvas in center*/
+body {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #fff;
+}
+
+#canvas {
+  width: 750px;
+  height: 350px;
+  border: 1px solid black;
+  image-rendering: pixelated;
+}
+</style>
+</head>
+<body>
+
+<h1 class="page-title">Raster Graphics</h1>
+
+<p class="instructions">6721601494 ศศิพงษ์ ชัยมัง
+กด w เพื่อใช้วาดเส้น
+    กด 1-0 เพื่อเปลี่ยนสี
+    กด p หรือ [ หรือ ] ปรับขนาดเส้น
+    กด e เพื่อใช้ยางลบ
+    กด s เพื่อสร้างเส้นสี่เหลี่ยม ถ้า S วาดสี่เหลี่ยม
+    กด c เพื่อสร้างเส้นรอบวงรี ถ้า C วาดวงรี
+    กด l เพื่อวาดเส้นตรง
+</p>
+
+<canvas id="canvas" width="200" height="200"></canvas>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const imageData = ctx.createImageData(canvas.width, canvas.height);
+const pixels = imageData.data; // Array of color [R,G,B,A, R,G,B,A, ...]
+
+function putPixel(x, y, r, g, b, a = 255) {
+  const idx = (y * canvas.width + x) * 4; // หา index แรกของ pixel (x,y)
+  pixels[idx] = r;
+  pixels[idx + 1] = g;
+  pixels[idx + 2] = b;
+  pixels[idx + 3] = a;
+}
+
+function drawBrush(x, y, r, g, b, a = 255) {
+
+  let size = Math.floor(brushSize / 2);
+
+  for(let j = -size; j <= size; j++) {
+    for(let i = -size; i <= size; i++) {
+
+      putPixel(
+        x + i,
+        y + j,
+        r, g, b, a
+      );
+
+    }
+  }
+}
+
+function drawLine(x1, y1, x2, y2, r, g, b, a = 255) {
+  const dx = Math.abs(x2 - x1);
+  const dy = Math.abs(y2 - y1);
+
+  if(dx > dy) {
+    const m = (y2 - y1) / (x2 - x1);
+    const c = y1 - m * x1;
+    for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+      const y = Math.round(m * x + c);
+      drawBrush(x, y, r, g, b, a);
+    }
+  } else {
+    const m = (x2 - x1) / (y2 - y1);
+    const c = x1 - m * y1;
+    for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+      const x = Math.round(m * y + c);
+      drawBrush(x, y, r, g, b, a);
+    }
+  }
+}
+
+function drawRect(x1, y1, x2, y2, r, g, b, a = 255) {
+  drawLine(x1, y1, x2, y1, r, g, b, a); // Top edge
+  drawLine(x2, y1, x2, y2, r, g, b, a); // Right edge
+  drawLine(x2, y2, x1, y2, r, g, b, a); // Bottom edge
+  drawLine(x1, y2, x1, y1, r, g, b, a); // Left edge
+}
+
+function drawRectFilled(x1, y1, x2, y2, r, g, b, a = 255) {
+  for (let y = y1; y <= y2; y++) {
+    for (let x = x1; x <= x2; x++) {
+      putPixel(x, y, r, g, b, a);
+    }
+  }
+}
+
+function drawRectGradient(x1, y1, x2, y2, r1, g1, b1, r2, g2, b2) {
+  for (let y = y1; y <= y2; y++) {
+    const t = (y - y1) / (y2 - y1);
+    const r = Math.round(r1 * (1 - t) + r2 * t);
+    const g = Math.round(g1 * (1 - t) + g2 * t);
+    const b = Math.round(b1 * (1 - t) + b2 * t);
+    for (let x = x1; x <= x2; x++) {
+      putPixel(x, y, r, g, b);
+    }
+  }
+}
+
+function drawEllipse(cx, cy, rx, ry, r, g, b, a = 255) {
+  for (let y = -ry; y <= ry; y++) {
+    for (let x = -rx; x <= rx; x++) {
+      if ((x * x) / (rx * rx) + (y * y) / (ry * ry) <= 1) {
+        putPixel(cx + x, cy + y, r, g, b, a);
+      }
+    }
+  }
+}
+
+function drawCircleOutline(cx, cy, rx, ry, r, g, b, a = 255) {
+
+  for (let y = -ry; y <= ry; y++) {
+    for (let x = -rx; x <= rx; x++) {
+      const value = (x * x) / (rx * rx) + (y * y) / (ry * ry);
+      if (value >= 0.85 && value <= 1.05) {
+        putPixel(cx + x, cy + y, r, g, b, a);
+      }
+    }
+  }
+}
+
+
+function eraseCircle(cx, cy, radius) {
+  for (let y = -radius; y <= radius; y++) {
+    for (let x = -radius; x <= radius; x++) {
+      if (x * x + y * y <= radius * radius) {
+        putPixel(cx + x, cy + y, 255, 255, 255);
+      }
+    }
+  }
+}
+
+function eraseLine(x1, y1, x2, y2) {
+  const dx = Math.abs(x2 - x1);
+  const dy = Math.abs(y2 - y1);
+
+  if (dx > dy) {
+    const m = (y2 - y1) / (x2 - x1);
+    const c = y1 - m * x1;
+
+    for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
+      const y = Math.round(m * x + c);
+      eraseCircle(x, y, 6);
+    }
+  } else {
+    const m = (x2 - x1) / (y2 - y1);
+    const c = x1 - m * y1;
+
+    for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
+      const x = Math.round(m * y + c);
+      eraseCircle(x, y, 6);
+    }
+  }
+}
+
+function toScaledMousePos(posX, posY) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: Math.floor((posX - rect.left) * scaleX),
+    y: Math.floor((posY - rect.top) * scaleY)
+  };
+}
+
+let isDragging = false; 
+let previousX = 0;
+let previousY = 0;
+let r = 0, g = 0, b = 0, a = 255; // Default color
+let brushSize = 1;
+let isWrite = false;
+let isEraser = false;
+let isSquare = false;
+let isFilledSquare = false;
+let isCircle = false;
+let isFilledCircle = false;
+let previewImage = null;
+let isLine = false;
+
+let squareX = 0;
+let squareY = 0;
+let circleX = 0;
+let circleY = 0;
+let lineX = 0;
+let lineY = 0;
+
+canvas.addEventListener('click', (event) => {
+
+});
+
+canvas.addEventListener('mousedown', (event) => {
+  isDragging = true;
+  console.log('Mouse down', event.offsetX, event.offsetY);
+
+  const {x,y}=toScaledMousePos(event.clientX,event.clientY);
+
+    isDragging=true;
+
+    if(isSquare){
+    squareX = x;
+    squareY = y;
+    previewImage = new Uint8ClampedArray(imageData.data);
+    }
+
+    if(isCircle){
+    circleX = x;
+    circleY = y;
+    previewImage = new Uint8ClampedArray(imageData.data);
+    }
+    if(isLine){
+    lineX = x;
+    lineY = y;
+    previewImage = new Uint8ClampedArray(imageData.data);
+    }
+});
+
+canvas.addEventListener('mouseup', (event) => {
+  isDragging = false;
+  console.log('Mouse up', event.offsetX, event.offsetY);
+
+  const {x,y}=toScaledMousePos(event.clientX,event.clientY);
+
+  if(isLine){
+  imageData.data.set(previewImage);
+  drawLine(
+    lineX,
+    lineY,
+    x,
+    y,
+    r, g, b
+  );
+  ctx.putImageData(imageData,0,0);
+  }
+
+    if(isSquare){
+    imageData.data.set(previewImage);
+    if(isFilledSquare){
+        drawRectFilled(squareX, squareY, x, y, r, g, b);
+    }else{
+        drawRect(squareX, squareY, x, y, r, g, b);
+    }
+
+    ctx.putImageData(imageData,0,0);
+  }
+    isDragging=false;
+
+  if(isCircle){
+    imageData.data.set(previewImage);
+    let rx = Math.abs(x - circleX);
+    let ry = Math.abs(y - circleY);
+
+    let cx = Math.round((circleX + x) / 2);
+    let cy = Math.round((circleY + y) / 2);
+    
+    if(isFilledCircle){
+    drawEllipse(cx, cy, rx, ry, r, g, b);
+    }else{
+    drawCircleOutline(cx, cy, rx, ry, r, g, b);
+    }
+
+    ctx.putImageData(imageData,0,0);
+  }
+});
+
+canvas.addEventListener('mousemove', (event) => {
+
+  const { x, y } = toScaledMousePos(event.clientX, event.clientY);
+  if(isDragging && isWrite) {
+    drawLine(previousX, previousY, x, y, r, g, b);
+    ctx.putImageData(imageData, 0, 0);
+  }
+  if (isDragging && isEraser) {
+  eraseLine(previousX, previousY, x, y); //size eraser
+  ctx.putImageData(imageData, 0, 0);
+  }
+
+  if(isDragging && isLine){
+  imageData.data.set(previewImage);
+  drawLine(
+    lineX,
+    lineY,
+    x,
+    y,
+    r, g, b
+  );
+
+  ctx.putImageData(imageData,0,0);
+  return;
+}
+
+  if(isDragging && isSquare){
+    imageData.data.set(previewImage);
+    if(isFilledSquare){
+        drawRectFilled(squareX, squareY, x, y, r, g, b);
+    }else{
+        drawRect(squareX, squareY, x, y, r, g, b);
+    }
+
+    ctx.putImageData(imageData,0,0);
+    return;
+  }
+
+
+  if(isDragging && isCircle){
+    imageData.data.set(previewImage);
+    let rx = Math.abs(x - circleX);
+    let ry = Math.abs(y - circleY);
+
+    let cx = Math.round((circleX + x) / 2);
+    let cy = Math.round((circleY + y) / 2);
+    if(isFilledCircle){
+    drawEllipse(cx, cy, rx, ry, r, g, b);
+    }else{
+    drawCircleOutline(cx, cy, rx, ry, r, g, b);
+    } 
+
+    ctx.putImageData(imageData,0,0);
+
+    return;
+  } 
+
+  previousX = x;
+  previousY = y;
+});
+
+window.addEventListener('keydown', (event) => {
+  
+  if(event.key === '1') {
+    r = 255; g = 0; b = 0; // Change to red
+  }
+  else if(event.key === '2') {
+    r = 0; g = 255; b = 0; // Change to green
+  }
+  else if(event.key === '3') {
+    r = 0; g = 0; b = 255; // Change to blue
+  }
+  else if(event.key === '4') {
+    r = 255; g = 255; b = 0;
+  }
+  else if(event.key === '5') {
+    r = 255; g = 105; b = 180;
+  }
+  else if(event.key === '6') {
+    r = 160; g = 32; b = 240;
+  }
+  else if(event.key === '7') {
+    r = 0; g = 191; b = 255;
+  }
+  else if(event.key === '8') {
+    r = 255; g = 165; b = 0;
+  }
+  else if(event.key === '9') {
+    r = 255; g = 255; b = 255;
+  }
+  else if(event.key === '0') {
+    r = 0; g = 0; b = 0;
+  }
+  else if(event.key === 'p'){
+  brushSize = 1;
+  }
+
+  else if(event.key === '['){
+  brushSize = 5;
+  }
+
+  else if(event.key === ']'){
+  brushSize = 10;
+  }
+});
+
+window.addEventListener('keyup', (event) => {
+if (event.key.toLowerCase() === 'w') {
+    isWrite = true;
+    isEraser = false; //turn off eraser
+    isSquare = false;
+    isFilledSquare = false;
+    isCircle = false;
+    isFilledCircle = false;
+  }
+
+else if(event.key === 'l') {
+
+  isLine = true;
+  isWrite = false;
+  isEraser = false;
+  isSquare = false;
+  isFilledSquare = false;
+  isCircle = false;
+  isFilledCircle = false;
+}
+
+else if (event.key.toLowerCase() === 'e') {
+    isEraser = true;
+    isWrite = false; //turn off write
+    isSquare = false;
+    isFilledSquare = false;
+    isCircle = false;
+    isFilledCircle = false;
+    isLine = false;
+  }
+
+else if (event.key === 's') {
+    isSquare = true;
+    isFilledSquare = false;
+    isWrite = false;
+    isEraser = false;
+    isCircle = false;
+    isFilledCircle = false;
+    isLine = false;
+  }
+
+else if (event.key === 'S') {
+    isSquare = true;
+    isFilledSquare = true;
+    isWrite = false;
+    isEraser = false;
+    isCircle = false;
+    isFilledCircle = false;
+    isLine = false;
+  }
+
+else if (event.key === 'c') {
+    isCircle = true;
+    isFilledCircle = false;
+    isWrite = false;
+    isEraser = false;
+    isSquare = false;
+    isFilledSquare = false;
+    isLine = false;
+}
+
+else if (event.key === 'C') {
+    isFilledCircle = true;
+    isCircle = true;
+    isWrite = false;
+    isEraser = false;
+    isSquare = false;
+    isFilledSquare = false;
+    isLine = false;
+}
+
+});
+ctx.putImageData(imageData, 0, 0);
+
+</script>
+</body>
+</html>
