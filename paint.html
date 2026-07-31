@@ -1,16 +1,37 @@
 <html>
 <head>
 <title>Raster Graphics</title>
-</head>
-<body>
-
-<p> 6721601494 ศศิพงษ์ ชัยมัง</p>
 <style>
+/* Raster Graphics มุมซ้ายบน */
+.page-title {
+  position: absolute;
+  top: 15px;
+  left: 20px;
+  margin: 0;
+  font-family: sans-serif;
+  font-size: 24px;
+}
+
+/* คำอธิบาย */
+.instructions {
+  position: absolute;
+  top: 55px;
+  left: 20px;
+  font-family: sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-line;
+  margin: 0;
+}
+
+/*Canvas in center*/
 body {
   margin: 0;
   display: flex;
   justify-content: center;
-  padding-top: 160px;
+  align-items: center;
+  height: 100vh;
+  background-color: #fff;
 }
 
 #canvas {
@@ -19,10 +40,23 @@ body {
   border: 1px solid black;
   image-rendering: pixelated;
 }
-
 </style>
-<canvas id="canvas" width="200" height="200"></canvas>
+</head>
+<body>
 
+<h1 class="page-title">Raster Graphics</h1>
+
+<p class="instructions">6721601494 ศศิพงษ์ ชัยมัง
+กด w เพื่อใช้วาดเส้น
+    กด 1-0 เพื่อเปลี่ยนสี
+    กด p หรือ [ หรือ ] ปรับขนาดเส้น
+    กด e เพื่อใช้ยางลบ
+    กด s เพื่อสร้างเส้นสี่เหลี่ยม ถ้า S วาดสี่เหลี่ยม
+    กด c เพื่อสร้างเส้นรอบวงรี ถ้า C วาดวงรี
+    กด l เพื่อวาดเส้นตรง
+</p>
+
+<canvas id="canvas" width="200" height="200"></canvas>
 
 <script>
 const canvas = document.getElementById('canvas');
