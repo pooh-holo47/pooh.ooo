@@ -6,4 +6,4 @@
 - [Tranformation](https://pooh-holo47.github.io/pooh.ooo/gui.html)
 
 ## Paint
-- [Paint](https://pooh-holo47.github.io/pooh.ooo/paint.html)
+- [Paint]
