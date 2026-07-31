@@ -1,11 +1,9 @@
-# sasipong.github
+# sasipong.github.io
 
 นาย ศศิพงษ์ ชัยมัง 6721601494
 
-https://pooh-holo47.github.io/pooh.ooo/
-
 ## Interactive Computer Graphics
-- [Tranformation](./gui.html)
+- [Tranformation](https://pooh-holo47.github.io/pooh.ooo/gui.html)
 
 ## Paint
-- [Paint](./paint.html)
+- [Paint](https://pooh-holo47.github.io/pooh.ooo/paint.html)
