@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Materials</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+    <!-- เพิ่มไลบรารี GUI สำหรับปรับตำแหน่งแสงตามโจทย์ -->
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.18"></script>
+</head>
+
+<body>
+    <!-- core three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/EXRLoader.js"></script>
+
+    <script>
+
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true; // Shadow
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+
+        const camera = new THREE.PerspectiveCamera(
+            75,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+        camera.position.set(0, 2, 5);
+        camera.lookAt(0, 0, 0);
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+        const abmientLight = new THREE.AmbientLight(0x404040, 1); // soft white light
+        scene.add(abmientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 10, 10);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+
+        // เพิ่ม GUI ควบคุมตำแหน่งแสง พร้อมใช้ .listen() เพื่อให้สอดรับกับการขยับด้วยเมาส์
+        const gui = new lil.GUI();
+        const lightFolder = gui.addFolder('Directional Light Position');
+        lightFolder.add(directionalLight.position, 'x', -20, 20, 0.1).listen();
+        lightFolder.add(directionalLight.position, 'y', 0, 20, 0.1).listen();
+        lightFolder.add(directionalLight.position, 'z', -20, 20, 0.1).listen();
+        lightFolder.open();
+
+        // เพิ่มฟังก์ชันควบคุมตำแหน่งแสงตามการเคลื่อนไหวของเมาส์ (Mouse Interaction)
+        window.addEventListener('mousemove', (event) => {
+            const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+            const mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            directionalLight.position.x = mouseX * 15;
+            directionalLight.position.y = (mouseY + 1) * 10; // ควบคุมความสูงในช่วง 0 ถึง 20
+        });
+
+        const exrSkyboxUrl = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/exr/1k/qwantani_sunrise_1k.exr';
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+
+        new THREE.EXRLoader()
+            .setDataType(THREE.UnsignedByteType)
+            .load(exrSkyboxUrl, (texture) => {
+                const skybox = pmremGenerator.fromEquirectangular(texture).texture;
+                scene.background = skybox;
+                scene.environment = skybox;
+
+                texture.dispose();
+                pmremGenerator.dispose();
+            }, undefined, (error) => {
+                console.error('Unable to load EXR skybox:', error);
+            });
+
+        // ตัวละครหลัก Thanos (ใช้ PBR material ในตัว GLB)
+        let thanosMesh = null;
+        const thanosLoader = new THREE.GLTFLoader();
+        thanosLoader.load('https://pooh-holo47.github.io/pooh.ooo/thanos_textured_rigged.glb', (gltf) => {
+            thanosMesh = gltf.scene;
+
+            thanosMesh.scale.set(4, 4, 4);
+            thanosMesh.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            thanosMesh.position.set(0, 0, 0);
+            scene.add(thanosMesh);
+        });
+
+        // ใส่พื้น (PBR MeshStandardMaterial)
+        const texFloor = new THREE.TextureLoader().load('https://pooh-holo47.github.io/pooh.ooo/cliff_side_diff_1k.jpg');
+        const matFloor = new THREE.MeshStandardMaterial({
+            map: texFloor,
+            side: THREE.DoubleSide,
+            roughness: 0.8
+        });
+        const planeGeometry = new THREE.PlaneGeometry(10, 10);
+        const plane = new THREE.Mesh(planeGeometry, matFloor);
+        plane.rotation.x = -Math.PI / 2; 
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        // นำสิ่งปลูกสร้าง/วัตถุ มาแสดงผลด้วย PBR Shader ตามโจทย์
+        const loader = new THREE.GLTFLoader();
+        loader.load('https://pooh-holo47.github.io/pooh.ooo/cannon_01_1k.glb', (gltf) => {
+            const model = gltf.scene;
+            model.scale.set(1, 1, 1);
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            model.position.set(2, 0, -1);
+            scene.add(model);
+        });
+
+        function animate(t) {
+            if (thanosMesh) {
+                thanosMesh.rotation.y = Math.sin(t * 0.001);
+            }
+            controls.update();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        animate(0);
+
+        window.addEventListener('keydown', (event) => {
+
+        });
+
+    </script>
+</body>
+
+</html>
