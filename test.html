@@ -25,7 +25,7 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true; // Shadow
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer.outputEncoding = THREE.sRGBEncoding; // [เพิ่ม] บรรทัดนี้สำคัญมากเพื่อให้แสดงผล EXR Skybox ได้ถูกต้อง
+        renderer.outputEncoding = THREE.sRGBEncoding; //บรรทัดนี้สำคัญมากเพื่อให้แสดงผล EXR Skybox ได้ถูกต้อง
         document.body.appendChild(renderer.domElement);
 
         const scene = new THREE.Scene();
