@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title></title>
+    <title>Animations</title>
     <style>
         body {
             margin: 0;
@@ -15,6 +15,7 @@
     <!-- core three.js -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/EXRLoader.js"></script>
 
@@ -39,21 +40,17 @@
         camera.lookAt(0, 0, 0);
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
 
-        //scene.background = new THREE.Color(0xaee8ff);
-        //scene.fog = new THREE.Fog(0x0d1010, 2, 10);
+        const abmientLight = new THREE.AmbientLight(0x404040, 1); // soft white light
+        scene.add(abmientLight);
 
-        //skybox
-        /*const loader = new THREE.CubeTextureLoader();
-        const skybox = loader.setPath('https://raw.githubusercontent.com/mrdoob/three.js/r128/examples/textures/cube/Bridge2/').load([
-            'posx.jpg', 'negx.jpg',
-            'posy.jpg', 'negy.jpg',
-            'posz.jpg', 'negz.jpg'
-        ]);
-        skybox.encoding = THREE.sRGBEncoding;
-        scene.background = skybox;
-        scene.environment = skybox;*/
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(10, 10, 10);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
 
-        // Panoramic 360-degree EXR skybox
+
+        
         const exrSkyboxUrl = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/exr/1k/grasslands_sunset_1k.exr';
         const pmremGenerator = new THREE.PMREMGenerator(renderer);
         pmremGenerator.compileEquirectangularShader();
@@ -71,40 +68,38 @@
                 console.error('Unable to load EXR skybox:', error);
             });
 
-        const geom = new THREE.BufferGeometry();
-        geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-        geom.computeVertexNormals();
-
-        const tex = new THREE.TextureLoader().load('https://pooh-holo47.github.io/pooh.ooo/mo_del.html', t => {
-        });
-        const mat = new THREE.MeshStandardMaterial({
-            map: tex
-        });
-
-        const mesh = new THREE.Mesh(geom, mat);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        scene.add(mesh);
 
 
-        //ใส่พื้น
-        const texFloor = new THREE.TextureLoader().load('https://pooh-holo47.github.io/pooh.ooo/rocky_terrain_02_diff_1k', t => {
+
+
+        //load glb และใช้ pbr material
+        const clock = new THREE.Clock();
+        let mixer;
+        const loader = new THREE.GLTFLoader();
+        loader.load('https://pooh-holo47.github.io/pooh.ooo/mo_del.glb', (gltf) => {
+            const model = gltf.scene;
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            model.position.set(0, 0, 1);
+            model.scale.set(3, 3, 3);
+            scene.add(model);
+            mixer = new THREE.AnimationMixer(model);
+            const clip = THREE.AnimationClip.findByName(gltf.animations, 'ball');
+            if (clip) mixer.clipAction(clip).play();
         });
-        const matFloor = new THREE.MeshStandardMaterial({
-            map: texFloor
-        });
-        const planeGeometry = new THREE.PlaneGeometry(10, 10);
-        const plane = new THREE.Mesh(planeGeometry, matFloor);
-        plane.rotation.x = -Math.PI / 2; 
-        plane.receiveShadow = true;
-        scene.add(plane);
+      
 
 
 
         
         function animate(t) {
-            mesh.rotation.y = Math.sin(t * 0.001);
+            const delta = clock.getDelta();
+            if (mixer) mixer.update(delta);
+            
             renderer.render(scene, camera);
             requestAnimationFrame(animate);
         }
