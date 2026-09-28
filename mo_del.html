@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title></title>
+    <title>Animations</title>
     <style>
         body {
             margin: 0;
@@ -15,20 +15,23 @@
     <!-- core three.js -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/EXRLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
 
     <script>
 
         const renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true; // Shadow
+        renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding; 
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.0;
         document.body.appendChild(renderer.domElement);
 
         const scene = new THREE.Scene();
 
-        
         const camera = new THREE.PerspectiveCamera(
             75,
             window.innerWidth / window.innerHeight,
@@ -39,58 +42,36 @@
         camera.lookAt(0, 0, 0);
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
 
-        //scene.background = new THREE.Color(0xaee8ff);
-        //scene.fog = new THREE.Fog(0x0d1010, 2, 10);
+        const abmientLight = new THREE.AmbientLight(0xffffff, 1);
+        scene.add(abmientLight);
 
-        //skybox
-        /*const loader = new THREE.CubeTextureLoader();
-        const skybox = loader.setPath('https://raw.githubusercontent.com/mrdoob/three.js/r128/examples/textures/cube/Bridge2/').load([
-            'posx.jpg', 'negx.jpg',
-            'posy.jpg', 'negy.jpg',
-            'posz.jpg', 'negz.jpg'
-        ]);
-        skybox.encoding = THREE.sRGBEncoding;
-        scene.background = skybox;
-        scene.environment = skybox;*/
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        directionalLight.position.set(10, 10, 10);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
 
-        // Panoramic 360-degree EXR skybox
-        const exrSkyboxUrl = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/exr/1k/grasslands_sunset_1k.exr';
+        const hdrUrl = 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/limpopo_golf_course_4k.hdr';
         const pmremGenerator = new THREE.PMREMGenerator(renderer);
         pmremGenerator.compileEquirectangularShader();
 
-        new THREE.EXRLoader()
-            .setDataType(THREE.UnsignedByteType)
-            .load(exrSkyboxUrl, (texture) => {
-                const skybox = pmremGenerator.fromEquirectangular(texture).texture;
-                scene.background = skybox;
-                scene.environment = skybox;
+        new THREE.RGBELoader()
+            .load(hdrUrl, (texture) => {
+                texture.mapping = THREE.EquirectangularReflectionMapping;
 
-                texture.dispose();
+                // สร้าง envMap สำหรับแสงสะท้อนบนวัตถุ
+                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+
+                // background ใช้ texture ดั้งเดิมเพื่อให้แสดงภาพพื้นหลังได้ถูกต้อง
+                scene.background = texture; 
+                scene.environment = envMap; 
+
                 pmremGenerator.dispose();
             }, undefined, (error) => {
-                console.error('Unable to load EXR skybox:', error);
+                console.error('Unable to load HDR skybox:', error);
             });
 
-        const geom = new THREE.BufferGeometry();
-        geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-        geom.computeVertexNormals();
-
-        const tex = new THREE.TextureLoader().load('https://pooh-holo47.github.io/pooh.ooo/mo_del.html', t => {
-        });
-        const mat = new THREE.MeshStandardMaterial({
-            map: tex
-        });
-
-        const mesh = new THREE.Mesh(geom, mat);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        scene.add(mesh);
-
-
-        //ใส่พื้น
-        const texFloor = new THREE.TextureLoader().load('https://pooh-holo47.github.io/pooh.ooo/rocky_terrain_02_diff_1k', t => {
-        });
+        // โหลดเท็กซ์เจอร์พื้นและสร้าง Plane ขนาด 10x10
+        const texFloor = new THREE.TextureLoader().load('https://pooh-holo47.github.io/pooh.ooo/rocky_terrain_02_diff_1k.jpg');
         const matFloor = new THREE.MeshStandardMaterial({
             map: texFloor
         });
@@ -100,19 +81,49 @@
         plane.receiveShadow = true;
         scene.add(plane);
 
+        // load glb และปรับขนาดให้พอดีกับพื้นที่ 10x10 อัตโนมัติ
+        const clock = new THREE.Clock();
+        let mixer;
+        const loader = new THREE.GLTFLoader();
+        loader.load('https://pooh-holo47.github.io/pooh.ooo/model.glb', (gltf) => {
+            const model = gltf.scene;
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
 
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const targetSize = 10;
+            const scale = targetSize / maxDim;
+            model.scale.set(scale, scale, scale);
 
-        
+            box.setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            model.position.x = -center.x;
+            model.position.z = -center.z;
+            model.position.y = -box.min.y;
+
+            scene.add(model);
+
+            mixer = new THREE.AnimationMixer(model);
+            gltf.animations.forEach((clip) => {
+                mixer.clipAction(clip).play();
+            });
+        });
+      
         function animate(t) {
-            mesh.rotation.y = Math.sin(t * 0.001);
+            const delta = clock.getDelta();
+            if (mixer) mixer.update(delta);
+            
+            controls.update(); 
             renderer.render(scene, camera);
             requestAnimationFrame(animate);
         }
         animate(0);
-
-        window.addEventListener('keydown', (event) => {
-
-        });
 
     </script>
 </body>
