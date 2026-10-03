@@ -70,17 +70,6 @@
                 console.error('Unable to load HDR skybox:', error);
             });
 
-        // โหลดเท็กซ์เจอร์พื้นและสร้าง Plane ขนาด 10x10
-        const texFloor = new THREE.TextureLoader().load('https://pooh-holo47.github.io/pooh.ooo/rocky_terrain_02_diff_1k.jpg');
-        const matFloor = new THREE.MeshStandardMaterial({
-            map: texFloor
-        });
-        const planeGeometry = new THREE.PlaneGeometry(10, 10);
-        const plane = new THREE.Mesh(planeGeometry, matFloor);
-        plane.rotation.x = -Math.PI / 2; 
-        plane.receiveShadow = true;
-        scene.add(plane);
-
         // load glb และปรับขนาดให้พอดีกับพื้นที่ 10x10 อัตโนมัติ
         const clock = new THREE.Clock();
         let mixer;
