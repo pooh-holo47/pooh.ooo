@@ -8,31 +8,10 @@
             margin: 0;
             overflow: hidden;
         }
-        /* สร้างสไตล์สำหรับข้อความที่ใช้คลิก */
-        #infoText {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: white;
-            font-family: sans-serif;
-            font-size: 20px;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            user-select: none;
-            z-index: 10;
-        }
-        #infoText:hover {
-            background: rgba(0, 0, 0, 0.8);
-        }
     </style>
 </head>
 
 <body>
-    <!-- ข้อความสำหรับคลิกเพื่อให้กล้องหันไปมองโมเดล -->
-    <div id="infoText">คลิกที่นี่เพื่อโฟกัสโมเดล</div>
-
     <!-- core three.js -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
@@ -91,15 +70,32 @@
                 console.error('Unable to load HDR skybox:', error);
             });
 
-        // ตัวแปรสำหรับเก็บตำแหน่งเป้าหมายและสถานะการคลิกข้อความ
-        let targetPosition = new THREE.Vector3(0, 0, 0);
-        let shouldFocus = false;
+        // นำระบบ Picking มาจาก picking.html[cite: 1]
+        const pickables = [];
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let picked_object = null;
 
-        document.getElementById('infoText').addEventListener('click', () => {
-            shouldFocus = true;
-        });
+        renderer.domElement.addEventListener('click', onPick);
+        function onPick(e) {
+            const r = renderer.domElement.getBoundingClientRect();
+            const x = (e.clientX ?? e.touches[0].clientX) - r.left;
+            const y = (e.clientY ?? e.touches[0].clientY) - r.top;
+            pointer.x = (x / r.width) * 2 - 1;
+            pointer.y = -(y / r.height) * 2 + 1;
 
-        // load glb และปรับขนาดให้พอดีกับพื้นที่ 10x10 อัตโนมัติ
+            raycaster.setFromCamera(pointer, camera);
+            const hit = raycaster.intersectObjects(pickables, true)[0];
+            if (hit == null)
+            {
+                picked_object = null;
+                return;
+            } 
+            picked_object = hit.object;
+            console.log('Picked object:', hit.object);
+        }
+
+        // load glb และปรับขนาดให้พอดีกับพื้นที่ 10x10 อัตโนมัติ[cite: 2]
         const clock = new THREE.Clock();
         let mixer;
         const loader = new THREE.GLTFLoader();
@@ -109,6 +105,7 @@
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
+                    pickables.push(child); // เพิ่ม mesh ของโมเดลเข้าสู่รายการ pickables[cite: 1, 2]
                 }
             });
 
@@ -127,10 +124,6 @@
 
             scene.add(model);
 
-            // อัปเดตตำแหน่งเป้าหมายกึ่งกลางของโมเดลหลังจากโหลดเสร็จ
-            const finalBox = new THREE.Box3().setFromObject(model);
-            finalBox.getCenter(targetPosition);
-
             mixer = new THREE.AnimationMixer(model);
             gltf.animations.forEach((clip) => {
                 mixer.clipAction(clip).play();
@@ -141,9 +134,11 @@
             const delta = clock.getDelta();
             if (mixer) mixer.update(delta);
             
-            // ขยับเป้าหมายกล้องไปยังโมเดลแบบ Smooth (Lerp) เมื่อคลิกข้อความ
-            if (shouldFocus) {
-                controls.target.lerp(targetPosition, 0.05);
+            // อัปเดตมุมมองกล้องตามวัตถุที่ถูกเลือก[cite: 1]
+            if (picked_object != null) {
+                const worldPos = new THREE.Vector3();
+                picked_object.getWorldPosition(worldPos);
+                controls.target.lerp(worldPos, 0.05);
             }
 
             controls.update(); 
