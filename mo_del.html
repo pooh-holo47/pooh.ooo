@@ -49,7 +49,8 @@
         const initialControlsTarget = new THREE.Vector3(0, 0, 0);  
 
         const textZoomPadding = 1.15;
-        const sphereZoomPadding = 1.5;
+        const sphereZoomPadding = 1.75;
+        const sphereViewElevation = 0.22;
         const textViewElevation = 0.08;
         const textMeshNames = new Set(["title.glb", "text.glb", "about.glb", "myjob.glb"]);
         const Text003FocusTargetName = "text003";
@@ -172,7 +173,8 @@
                 cameraOffset = textNormal.multiplyScalar(distance);
             } else {
                 camera.up.copy(defaultCameraUp);
-                cameraOffset = new THREE.Vector3(0, textViewElevation, viewSide).normalize().multiplyScalar(distance);
+                const viewElevation = followAnimation ? sphereViewElevation : textViewElevation;
+                cameraOffset = new THREE.Vector3(0, viewElevation, viewSide).normalize().multiplyScalar(distance);
             }
 
             moveToTarget(sphere.center.clone().add(cameraOffset), sphere.center);
@@ -222,7 +224,7 @@
                         const target = findObjectByName(loadedModel, Text007FocusTargetName);
                         if (target) {
                             focusedMesh = target;
-                            focusOnMesh(target, 1, true);
+                            focusOnMesh(target, -1);
                         } else {
                             console.warn(`Focus target not found: ${Text007FocusTargetName}`);
                         }
@@ -335,8 +337,9 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
             if (focusedMesh) {
-                const alignToText = normalizeName(focusedMesh.name).includes(normalizeName(Text007FocusTargetName));
-                focusOnMesh(focusedMesh, 1, alignToText, followFocusedMeshAnimation);
+                const useBackView = [Text007FocusTargetName, PaintFocusTargetName]
+                    .some((name) => normalizeName(focusedMesh.name).includes(normalizeName(name)));
+                focusOnMesh(focusedMesh, useBackView ? -1 : 1, false, followFocusedMeshAnimation);
             }
         });
     </script>

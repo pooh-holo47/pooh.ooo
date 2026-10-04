@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>Animations</title>
+    <title>Animations with Custom Text Focus & Esc View</title>
     <style>
         body {
             margin: 0;
@@ -20,8 +20,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
 
     <script>
-
-        const renderer = new THREE.WebGLRenderer();
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -38,9 +37,37 @@
             0.1,
             1000
         );
-        camera.position.set(0, 2, 5);
+        const defaultCameraUp = camera.up.clone();
+        camera.position.set(0, 3, 8);
         camera.lookAt(0, 0, 0);
+        
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // 1. กำหนดตำแหน่งกล้องและเป้าหมายตอนกดปุ่ม Esc (มุมมองภาพรวม)
+        const initialCameraPos = new THREE.Vector3(0, 2, 9);       
+        const initialControlsTarget = new THREE.Vector3(0, 0, 0);  
+
+        const textZoomPadding = 1.15;
+        const sphereZoomPadding = 1.75;
+        const sphereViewElevation = 0.22;
+        const textViewElevation = 0.08;
+        const textMeshNames = new Set(["title.glb", "text.glb", "about.glb", "myjob.glb"]);
+        const Text003FocusTargetName = "text003";
+        const Text002FocusTargetName = "text002";
+        const Text005FocusTargetName = "text005";
+        const Text007FocusTargetName = "text007";
+        const Text004FocusTargetName = "text004";
+        const PaintFocusTargetName = "paint";
+        const SphereFocusTargetName = "Sphere";
+        const guiFocusTargetName = "gui";
+        const thanosFocusTargetName = "thanos";
+
+        // ประกาศตัวแปรเสริมที่จำเป็นสำหรับฟังก์ชัน loadModel ด้านล่าง
+        const animationMixers = [];
+        const nonPickableNames = new Set();
+        const pickables = [];
+        let scene1 = null;
 
         const abmientLight = new THREE.AmbientLight(0xffffff, 1);
         scene.add(abmientLight);
@@ -58,10 +85,8 @@
             .load(hdrUrl, (texture) => {
                 texture.mapping = THREE.EquirectangularReflectionMapping;
 
-                // สร้าง envMap สำหรับแสงสะท้อนบนวัตถุ
                 const envMap = pmremGenerator.fromEquirectangular(texture).texture;
 
-                // background ใช้ texture ดั้งเดิมเพื่อให้แสดงภาพพื้นหลังได้ถูกต้อง
                 scene.background = texture; 
                 scene.environment = envMap; 
 
@@ -70,23 +95,28 @@
                 console.error('Unable to load HDR skybox:', error);
             });
 
-        // โหลดเท็กซ์เจอร์พื้นและสร้าง Plane ขนาด 10x10
-        const texFloor = new THREE.TextureLoader().load('https://pooh-holo47.github.io/pooh.ooo/rocky_terrain_02_diff_1k.jpg');
-        const matFloor = new THREE.MeshStandardMaterial({
-            map: texFloor
-        });
-        const planeGeometry = new THREE.PlaneGeometry(10, 10);
-        const plane = new THREE.Mesh(planeGeometry, matFloor);
-        plane.rotation.x = -Math.PI / 2; 
-        plane.receiveShadow = true;
-        scene.add(plane);
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let loadedModel = null;
+        const animationActions = {};
 
-        // load glb และปรับขนาดให้พอดีกับพื้นที่ 10x10 อัตโนมัติ
+        let isFocusing = false;
+        const targetCameraPos = new THREE.Vector3();
+        const targetControlsTarget = new THREE.Vector3();
+        let focusedMesh = null;
+        let followFocusedMeshAnimation = false;
+        const cameraFollowBounds = new THREE.Box3();
+        const cameraFollowCenter = new THREE.Vector3();
+        const cameraFollowPreviousCenter = new THREE.Vector3();
+        const cameraFollowDelta = new THREE.Vector3();
+
         const clock = new THREE.Clock();
         let mixer;
         const loader = new THREE.GLTFLoader();
         loader.load('https://pooh-holo47.github.io/pooh.ooo/model.glb', (gltf) => {
             const model = gltf.scene;
+            loadedModel = model; 
+            
             model.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
@@ -110,14 +140,191 @@
             scene.add(model);
 
             mixer = new THREE.AnimationMixer(model);
+            
             gltf.animations.forEach((clip) => {
-                mixer.clipAction(clip).play();
+                const action = mixer.clipAction(clip);
+                animationActions[clip.name] = action;
+                action.play(); 
             });
+        });
+
+        // ฟังก์ชันสั่งให้กล้องเคลื่อนไปเป้าหมาย
+        function moveToTarget(camPos, targetPos) {
+            targetCameraPos.copy(camPos);
+            targetControlsTarget.copy(targetPos);
+            isFocusing = true;
+        }
+
+        function focusOnMesh(mesh, viewSide = 1, alignToText = false, followAnimation = false) {
+            const bounds = new THREE.Box3().setFromObject(mesh);
+            const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+            const verticalHalfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+            const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * camera.aspect);
+            const limitingHalfFov = Math.min(verticalHalfFov, horizontalHalfFov);
+            const zoomPadding = followAnimation ? sphereZoomPadding : textZoomPadding;
+            const distance = Math.max(sphere.radius, 0.1) / Math.sin(limitingHalfFov) * zoomPadding;
+            let cameraOffset;
+
+            if (alignToText) {
+                const worldQuaternion = mesh.getWorldQuaternion(new THREE.Quaternion());
+                const textUp = new THREE.Vector3(0, 1, 0).applyQuaternion(worldQuaternion).normalize();
+                const textNormal = new THREE.Vector3(0, 0, viewSide).applyQuaternion(worldQuaternion).normalize();
+                camera.up.copy(textUp);
+                cameraOffset = textNormal.multiplyScalar(distance);
+            } else {
+                camera.up.copy(defaultCameraUp);
+                const viewElevation = followAnimation ? sphereViewElevation : textViewElevation;
+                cameraOffset = new THREE.Vector3(0, viewElevation, viewSide).normalize().multiplyScalar(distance);
+            }
+
+            moveToTarget(sphere.center.clone().add(cameraOffset), sphere.center);
+            followFocusedMeshAnimation = followAnimation;
+            if (followAnimation) cameraFollowPreviousCenter.copy(sphere.center);
+        }
+
+        const normalizeName = (s) => s.toLowerCase().replace(/\.glb$/, '').replace(/[.\s_]/g, '');
+
+        function findObjectByName(root, name) {
+            let match = null;
+            root.traverse((object) => {
+                if (!match && normalizeName(object.name) === normalizeName(name)) {
+                    match = object;
+                }
+            });
+            return match;
+        }
+
+        // คลิกตัวอักษรเพื่อซูมเข้าไปมอง
+        window.addEventListener('pointerdown', (event) => {
+            if (!loadedModel) return;
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(loadedModel, true);
+
+            if (intersects.length > 0) {
+                const hitMesh = intersects[0].object;
+                console.log("Clicked Mesh Name:", hitMesh.name); // เช็คชื่อ Mesh ใน Console (F12)[cite: 1]
+
+                let clickedObject = hitMesh;
+                while (clickedObject && clickedObject !== loadedModel) {
+                    if (normalizeName(clickedObject.name).includes(normalizeName(Text003FocusTargetName))) {
+                        const target = findObjectByName(loadedModel, Text002FocusTargetName);
+                        if (target) {
+                            focusedMesh = target;
+                            focusOnMesh(target);
+                        } else {
+                            console.warn(`Focus target not found: ${Text003FocusTargetName}`);
+                        }
+                        return;
+                    }
+                    if (normalizeName(clickedObject.name).includes(normalizeName(Text005FocusTargetName))) {
+                        const target = findObjectByName(loadedModel, Text007FocusTargetName);
+                        if (target) {
+                            focusedMesh = target;
+                            focusOnMesh(target, -1);
+                        } else {
+                            console.warn(`Focus target not found: ${Text007FocusTargetName}`);
+                        }
+                        return;
+                    }
+                    if (normalizeName(clickedObject.name).includes(normalizeName(Text004FocusTargetName))) {
+                        const target = findObjectByName(loadedModel, PaintFocusTargetName);
+                        if (target) {
+                            focusedMesh = target;
+                            focusOnMesh(target, -1);
+                        } else {
+                            console.warn(`Focus target not found: ${PaintFocusTargetName}`);
+                        }
+                        return;
+                    }
+                    if (normalizeName(clickedObject.name).includes(normalizeName(PaintFocusTargetName))) {
+                        window.location.assign("https://pooh-holo47.github.io/pooh.ooo/paint.html");
+                        return;
+                    }
+                    if (normalizeName(clickedObject.name).includes(normalizeName(guiFocusTargetName))) {
+                        window.location.assign("https://pooh-holo47.github.io/pooh.ooo/gui.html");
+                        return;
+                    }
+                    if (normalizeName(clickedObject.name).includes(normalizeName(thanosFocusTargetName))) {
+                        window.location.assign("https://pooh-holo47.github.io/pooh.ooo/ThanosisMy.html");
+                        return;
+                    }
+                    if (normalizeName(clickedObject.name).includes(normalizeName(SphereFocusTargetName))) {
+                        focusedMesh = clickedObject;
+                        focusOnMesh(clickedObject, 1, false, true);
+                        return;
+                    }
+                    clickedObject = clickedObject.parent;
+                }
+
+                const meshName = hitMesh.name.toLowerCase();
+                if (meshName.includes("text") || textMeshNames.has(meshName)) {
+                    focusedMesh = hitMesh;
+                    focusOnMesh(hitMesh);
+                }
+            }
+        });
+
+        // ฟังก์ชันรีเซ็ตมุมมองไปตำแหน่งที่คุณกำหนดเอง (Esc)
+        function resetView() {
+            focusedMesh = null;
+            followFocusedMeshAnimation = false;
+            camera.up.copy(defaultCameraUp);
+            moveToTarget(initialCameraPos, initialControlsTarget);
+        }
+
+        // รองรับการกดปุ่ม ESC บนคีย์บอร์ดเพื่อกลับไปยังตำแหน่งที่กำหนด
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                resetView();
+            }
+        });
+
+        // กดปุ่ม P เพื่อพิมพ์ค่ากล้องปัจจุบันออก Console
+        window.addEventListener('keydown', (event) => {
+            if (event.key.toLowerCase() === 'p') {
+                const c = camera.position, t = controls.target;
+                const f = (n) => +n.toFixed(2);
+                console.log(`{ cam: [${f(c.x)}, ${f(c.y)}, ${f(c.z)}], target: [${f(t.x)}, ${f(t.y)}, ${f(t.z)}] }`);
+            }
         });
       
         function animate(t) {
             const delta = clock.getDelta();
             if (mixer) mixer.update(delta);
+            // อัปเดต mixer ของโมเดลอื่นๆ เพิ่มเติมด้วยถ้าต้องการ
+            animationMixers.forEach((m) => m.update(delta));
+
+            if (followFocusedMeshAnimation && focusedMesh) {
+                cameraFollowBounds.setFromObject(focusedMesh);
+                cameraFollowBounds.getCenter(cameraFollowCenter);
+                cameraFollowDelta.subVectors(cameraFollowCenter, cameraFollowPreviousCenter);
+
+                if (isFocusing) {
+                    targetControlsTarget.add(cameraFollowDelta);
+                    targetCameraPos.add(cameraFollowDelta);
+                } else {
+                    camera.position.add(cameraFollowDelta);
+                    controls.target.add(cameraFollowDelta);
+                    targetControlsTarget.add(cameraFollowDelta);
+                    targetCameraPos.add(cameraFollowDelta);
+                }
+
+                cameraFollowPreviousCenter.copy(cameraFollowCenter);
+            }
+
+            if (isFocusing) {
+                const focusLerp = followFocusedMeshAnimation ? 0.18 : 0.08;
+                camera.position.lerp(targetCameraPos, focusLerp);
+                controls.target.lerp(targetControlsTarget, focusLerp);
+
+                if (camera.position.distanceTo(targetCameraPos) < 0.01 && controls.target.distanceTo(targetControlsTarget) < 0.01) {
+                    isFocusing = false;
+                }
+            }
             
             controls.update(); 
             renderer.render(scene, camera);
@@ -125,6 +332,16 @@
         }
         animate(0);
 
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (focusedMesh) {
+                const useBackView = [Text007FocusTargetName, PaintFocusTargetName]
+                    .some((name) => normalizeName(focusedMesh.name).includes(normalizeName(name)));
+                focusOnMesh(focusedMesh, useBackView ? -1 : 1, false, followFocusedMeshAnimation);
+            }
+        });
     </script>
 </body>
 
